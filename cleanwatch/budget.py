@@ -10,9 +10,10 @@ def get_total_singles_rate(components: List[Component]) -> float:
         total += comp.total_singles
     return total
 
+
 def total_accidentals(
         components: List[Component], ds=0.05, dt=0.0001
-        ) -> float:
+) -> float:
     prompt = 0.
     delayed = 0.
     for comp in components:
@@ -21,22 +22,24 @@ def total_accidentals(
     total = prompt * delayed * ds * dt
     return total * 60 * 60 * 24
 
+
 def total_bgr(
         components: List[Component], RN=0.034, FN=0.023, signal=0.485, WRratio=1.15
-        ) -> float:
+) -> float:
     acc = total_accidentals(components)
     bgr = acc + (WRratio * signal) + FN + RN
     return bgr
 
+
 def t3sigma(
         signal: float,
         bg: float,
-        sigma: float=4.65,
-        Ronoff: float=1.5,
-        RN: float=0.034,
-        FN: float=0.023,
-        WRratio: float=1.15
-        ) -> float:
+        sigma: float = 4.65,
+        Ronoff: float = 1.5,
+        RN: float = 0.034,
+        FN: float = 0.023,
+        WRratio: float = 1.15
+) -> float:
     S = signal * 0.9
     WR = WRratio * S
     B = bg + RN + FN + WR
@@ -44,15 +47,16 @@ def t3sigma(
     obstime = offtime * (1 + Ronoff)
     return offtime
 
+
 def maxbg(
         signal: float,
         t3sigma: float,
-        sigma: float=4.65,
-        Ronoff: float=1.5,
-        RN: float=0.034,
-        FN: float=0.023,
-        WRratio: float=1.15
-        ) -> float:
+        sigma: float = 4.65,
+        Ronoff: float = 1.5,
+        RN: float = 0.034,
+        FN: float = 0.023,
+        WRratio: float = 1.15
+) -> float:
     # Rearrange t3sigma to solve for max B
     S = signal * 0.9
     WR = WRratio * S
@@ -63,26 +67,29 @@ def maxbg(
                          of {signal} per day. Returning.")
     return maxB
 
+
 def bg_ratio(
         components: List[Component],
         signal: float,
         t3sigma: float,
-        sigma: float=4.65,
-        Ronoff: float=1.5,
-        RN: float=0.034,
-        FN: float=0.023,
-        WRratio: float=1.15
-        ) -> float:
-    mb = maxbg(signal, t3sigma, sigma=sigma, Ronoff=Ronoff, RN=RN, FN=FN, WRratio=WRratio)
+        sigma: float = 4.65,
+        Ronoff: float = 1.5,
+        RN: float = 0.034,
+        FN: float = 0.023,
+        WRratio: float = 1.15
+) -> float:
+    mb = maxbg(signal, t3sigma, sigma=sigma, Ronoff=Ronoff,
+               RN=RN, FN=FN, WRratio=WRratio)
     bg = total_bgr(components)
     return bg / mb
+
 
 def inv_gradients(
         components: List[Component],
         signal: float,
         t3sigma: float
-        ) -> Tuple[Dict[str, Dict[str, float]], float]:
-    # Need to copy components, adjust activity for a given isotope, calculate 
+) -> Tuple[Dict[str, Dict[str, float]], float]:
+    # Need to copy components, adjust activity for a given isotope, calculate
     # and then return components to original state
     # Do not work on comp or components, only comps_copy
     gradients = {}
@@ -113,9 +120,10 @@ def inv_gradients(
 # A4 = f(a1) + f(a2) + f(a3)
 # a'1 = a1(1 - a1)^0.5 A4 / (sum(an(1 - an)^0.5))
 
+
 def inverse_scale(
-    components: List[Component],
-    scale_factor: float):
+        components: List[Component],
+        scale_factor: float):
     comp_contribs = {}
     total = total_accidentals(components)
     sum = 0
@@ -140,27 +148,30 @@ def inverse_scale(
         for iso in comp_contribs[comp]:
             orig_contrib = comp_contribs[comp][iso]
             denom += orig_contrib * (1 - orig_contrib)**0.5
-            if type(denom) == complex: raise ValueError("inverse_scale: denom is complex")
+            if type(denom) == complex:
+                raise ValueError("inverse_scale: denom is complex")
     comp_scaled_contribs = {}
     for comp in comp_contribs:
         iso_scaled_contribs = {}
         for iso in comp_contribs[comp]:
             orig_contrib = comp_contribs[comp][iso]
-            scaled_contrib = (orig_contrib * (1 - orig_contrib)**0.5 * scale_factor) / denom
+            scaled_contrib = (orig_contrib * (1 - orig_contrib)
+                              ** 0.5 * scale_factor) / denom
             sum_scaled += scaled_contrib
             iso_scaled_contribs[iso] = scaled_contrib
         comp_scaled_contribs[comp] = iso_scaled_contribs
     breakpoint()
 
+
 def budget(
         components: List[Component],
         signal: float,
         t3sigma: float,
-        totacc: float=0,
-        mbg: float=0,
+        totacc: float = 0,
+        mbg: float = 0,
         method='e',
-        update: bool=False
-        ) -> List[Component]:
+        update: bool = False
+) -> List[Component]:
     revcomponents = []
     if not totacc:
         totacc = total_accidentals(components)
@@ -172,13 +183,16 @@ def budget(
             return revcomponents
     if method == 'c':
         grads, norm = inv_gradients(components, signal, t3sigma)
-        scales = {compname: {iso: grad/norm for iso, grad in isodict.items()} for compname, isodict in grads.items()}
+        scales = {compname: {iso: grad/norm for iso, grad in isodict.items()}
+                  for compname, isodict in grads.items()}
         for comp in components:
             bg_share = comp.share(mbg, totacc, scales=scales)
             revact = comp.revise_activity(bg_share, mbg/totacc)
-            revcomp = Component(comp.name, comp.mass, rate_format=comp.rate_format)
+            revcomp = Component(comp.name, comp.mass,
+                                rate_format=comp.rate_format)
             for iso, act in revact.items():
-                revcomp.add_isotope(iso, act) # type: ignore [why does this trigger issue with type hints?]
+                # type: ignore [why does this trigger issue with type hints?]
+                revcomp.add_isotope(iso, act)
             revcomp.update()
             revcomponents.append(revcomp)
         return revcomponents
@@ -187,7 +201,8 @@ def budget(
         revact = comp.revise_activity(bg_share, mbg/totacc)
         revcomp = Component(comp.name, comp.mass, rate_format=comp.rate_format)
         for iso, act in revact.items():
-            revcomp.add_isotope(iso, act) # type: ignore why does this trigger issue with type hints?
+            # type: ignore why does this trigger issue with type hints?
+            revcomp.add_isotope(iso, act)
         revcomp.update()
         revcomponents.append(revcomp)
     return revcomponents

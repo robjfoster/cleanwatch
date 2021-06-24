@@ -34,6 +34,7 @@ class Isotope():
     def calculate_activity(self) -> float:
         return 6.022e23 * self.lam / (self.Z / 1000)
 
+
 # No alphas
 chains = {
     "U238": ['234Pa', '214Pb', '214Bi', '210Bi', '210Tl'],

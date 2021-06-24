@@ -1,20 +1,21 @@
 import cmd
 
-from .budget import * # Terrible practice but will fix later
-from .component import get_defaults
+from .budget import *  # Terrible practice but will fix later
 from .plotting import cb_plot
 
 # The command line interface for cleanwatch
 
-components = get_defaults()
 
 class Interface(cmd.Cmd):
 
     intro = "\nCleanwatch. Select an option to continue."
     prompt = "\nPlaceholder for options list.\nChoose option: "
 
-    def __init__(self):
+    def __init__(self, components):
         cmd.Cmd.__init__(self)
+        self.components = components
+        for comp in self.components:
+            comp.update()
 
     def do_greet(self, args):
         """Print hello"""
@@ -24,7 +25,7 @@ class Interface(cmd.Cmd):
         return True
 
     def default(self, args):
-        if args == 'q' or args =='x':
+        if args == 'q' or args == 'x':
             return self.do_exit(args)
         else:
             return
@@ -36,7 +37,7 @@ class Interface(cmd.Cmd):
 
     def do_print(self, args):
         text = ""
-        for comp in components:
+        for comp in self.components:
             text += comp.output()
         print(text)
 
@@ -65,21 +66,24 @@ class Interface(cmd.Cmd):
                 print("Invalid input.\n")
                 continue
             break
-        revcomponents = budget(components, signal, t3sigma, method=method)
+        revcomponents = budget(self.components, signal, t3sigma, method=method)
         if revcomponents:
             print("\nRevised component activities:")
             for comp in revcomponents:
                 comp.revprint()
 
     def do_bgr(self, args):
-        print(total_bgr(components))
+        print(total_bgr(self.components))
 
     def do_activity(self, args):
         while True:
             try:
-                choice = input(f"Choose component to adjust. Choices {[comp.name for comp in components]}: ")
-                if not choice: return
-                user_comp = components[[comp.name.lower() for comp in components].index(choice.lower())]
+                choice = input(
+                    f"Choose component to adjust. Choices {[comp.name for comp in self.components]}: ")
+                if not choice:
+                    return
+                user_comp = self.components[[
+                    comp.name.lower() for comp in self.components].index(choice.lower())]
             except ValueError:
                 print("Invalid input. \n")
                 continue
@@ -89,4 +93,4 @@ class Interface(cmd.Cmd):
         return
 
     def do_plot(self, args):
-        cb_plot(components, option='c')
+        cb_plot(self.components, option='c')

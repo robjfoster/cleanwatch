@@ -11,24 +11,26 @@ from .isotope import isotopes
 
 EFF_RFILE = "results.root"
 
+
 class Component():
     # Container for each area of the detector e.g. PMTs, tank. Handles
     # activity and efficiency calculations.
 
-    def __init__(self, name: str, mass: float, region: str=None,
-                 rate_format: str=None):
+    def __init__(self, name: str, mass: float, region: str = None,
+                 rate_format: str = None):
         self.name = name
         self.region = region
         self.rate_format = rate_format
         self.mass = mass
         self.isotopes = {}
         # Could have all these dicts
-        self.activities = {} # Dict of {isotope_obj: activity}
-        self.efficiencies = {} # Dict of {isotope_obj: {isotope_str: eff}}
-        self.singles = {} # Dict of {isotope_obj: {isotope_str: (prompt, delayed)}}
+        self.activities = {}  # Dict of {isotope_obj: activity}
+        self.efficiencies = {}  # Dict of {isotope_obj: {isotope_str: eff}}
+        # Dict of {isotope_obj: {isotope_str: (prompt, delayed)}}
+        self.singles = {}
         self.accidentals = {}
-        #or
-        #self.isodata = {} # Dict of {iso_name: {'act': act, 'eff': eff, 'rate': rate}}
+        # or
+        # self.isodata = {} # Dict of {iso_name: {'act': act, 'eff': eff, 'rate': rate}}
         # and just write functions to easily access each property
         self.rates = {}
 
@@ -72,8 +74,8 @@ class Component():
             self,
             max_bg: float,
             tot_acc: float,
-            scales: Dict[str, Dict[str, float]]=None
-            ) -> Dict[str, Dict[str, float]]:
+            scales: Dict[str, Dict[str, float]] = None
+    ) -> Dict[str, Dict[str, float]]:
         # Update singles to new total background
         shares = {}
         for iso, iso_obj in self.isotopes.items():
@@ -83,19 +85,21 @@ class Component():
             else:
                 scale = 1
             for ciso, rate in self.singles[iso].items():
-                isoshare = rate[0] + (max_bg - tot_acc) / tot_acc * rate[0] * scale
+                isoshare = (rate[0] + (max_bg - tot_acc)
+                            / tot_acc * rate[0] * scale)
                 cshares[ciso] = isoshare
             shares[iso] = cshares
-        return shares # updated prompt rate for each isotope in Hz
+        return shares  # updated prompt rate for each isotope in Hz
 
     def revise_activity(
             self, upd_singles: Dict[str, Dict[str, float]], ratio: float
-            ) -> Dict[str, Dict[str, float]]:
+    ) -> Dict[str, Dict[str, float]]:
         # This function should calculate PPM from activity
         r_rates = {}
         for iso, iso_obj in self.isotopes.items():
-            prompt_rates = {key:value[0] for (key, value) in self.singles[iso].items()}
-            maxiso = max(prompt_rates, key=prompt_rates.get) #type: ignore
+            prompt_rates = {key: value[0]
+                            for (key, value) in self.singles[iso].items()}
+            maxiso = max(prompt_rates, key=prompt_rates.get)  # type: ignore
             try:
                 if self.rate_format == 'ppm':
                     rev_rate = (upd_singles[iso][maxiso]
@@ -108,7 +112,8 @@ class Component():
                                 / self.mass
                                 / ratio**0.5)
                 else:
-                    raise AttributeError(f"Rate format not recognised for {iso} in {self.name}")
+                    raise AttributeError(
+                        f"Rate format not recognised for {iso} in {self.name}")
             except ZeroDivisionError:
                 rev_rate = 0
             r_rates[iso] = rev_rate
@@ -116,11 +121,11 @@ class Component():
         return r_rates
 
     def get_efficiencies(
-                        self,
-                        prompt_cut: int,
-                        delayed_cut: int,
-                        fiducial_cut: float =1.9
-                        ) -> None:
+        self,
+        prompt_cut: int,
+        delayed_cut: int,
+        fiducial_cut: float = 1.9
+    ) -> None:
         efficiencies = {}
         rfile = root.TFile(EFF_RFILE, "READ")
         for iso, iso_obj in self.isotopes.items():
@@ -133,8 +138,10 @@ class Component():
                     histname = find_hist(self.name, iso)
                 if histname:
                     hist = rfile.Get(histname)
-                    p_eff = hist.GetBinContent(hist.FindBin(fiducial_cut, prompt_cut))
-                    d_eff = hist.GetBinContent(hist.FindBin(fiducial_cut, delayed_cut))
+                    p_eff = hist.GetBinContent(
+                        hist.FindBin(fiducial_cut, prompt_cut))
+                    d_eff = hist.GetBinContent(
+                        hist.FindBin(fiducial_cut, delayed_cut))
                     if ciso == "210Tl":
                         p_eff *= 0.002
                         d_eff *= 0.002
@@ -172,8 +179,8 @@ class Component():
         return rates
 
     def calculate_accidentals(
-            self, time_cut: float=0.0001, space_cut: float=0.05
-            ) -> None:
+            self, time_cut: float = 0.0001, space_cut: float = 0.05
+    ) -> None:
         accidentals = {}
         tot_acc = 0.
         for iso, iso_obj in self.isotopes.items():
@@ -221,41 +228,11 @@ class Component():
     def __repr__(self):
         return f"{self.name} Component"
 
-def get_defaults() -> List[Component]:
-    water = Component("WaterVolume", mass=6300000, rate_format='Bq/kg')
-    water.add_isotope("222Rn", 1e-6)
-    #water.add_isotope("238U", 1e-6)
-    #water.add_isotope("235U", 4.66e-8)
-    #water.add_isotope("232Th", 1e-7)
-    #water.add_isotope("40K", 4e-6)
-    gd = Component("GD", mass=12600, rate_format='Bq/kg')
-    #gd.add_isotope("152Gd", 0.841)
-    gd.add_isotope("238U", 4.96e-5)
-    gd.add_isotope("235U", 2.31e-6)
-    gd.add_isotope("232Th", 2.48e-5)
-    #gd.add_isotope("40K", 2e-3)
-    pmt = Component("PMT", mass=4580.8, rate_format='ppm')
-    pmt.add_isotope("238U", 0.064)
-    pmt.add_isotope("232Th", 0.172)
-    pmt.add_isotope("40K", 36)
-    veto = Component("VETO", mass=458.08, rate_format='ppm')
-    veto.add_isotope("238U", 0.341)
-    veto.add_isotope("232Th", 1.33)
-    veto.add_isotope("40K", 260)
-    tank = Component("TANK", mass=257706, rate_format='ppm')
-    tank.add_isotope("238U", 9.49e-3)
-    #tank.add_isotope("235U", 8.38e-5)
-    tank.add_isotope("232Th", 4.19e-3)
-    tank.add_isotope("40K", 1.75)
-    tank.add_isotope("137Cs", 2.47e-11)
-    tank.add_isotope("60Co", 1.79e-12)
-    rock = Component("ROCK", mass=0, rate_format='ppm')
-    print("Default component activities loaded.")
-    return [water, gd, pmt, veto, tank]
-
 # For getting names of histograms in results.root, can do:
 # for tkey in file.GetListOfKeys(): key = tkey.GetName(); hist = file.Get(key)
-def find_hist(location: str, isotope: str, parent=None) -> List[str]:
+
+
+def find_hist(location: str, isotope: str, parent: bool = None) -> List[str]:
     file = root.TFile(EFF_RFILE, "READ")
     histkeys = []
     for tkey in file.GetListOfKeys():
@@ -264,12 +241,14 @@ def find_hist(location: str, isotope: str, parent=None) -> List[str]:
     # May need to remove trailing underscore for RN and FN
     matches = [key for key in matches if re.search(rf'_{isotope}_*', key)]
     if parent:
-        matches = [key for key in matches if re.search(rf'_CHAIN_{parent}_NA', key)]
+        matches = [key for key in matches if re.search(
+            rf'_CHAIN_{parent}_NA', key)]
     if len(matches) != 1:
         #print(f"Could not find histogram for {isotope} ({parent}) in {location} in {EFF_RFILE}")
         return []
     else:
         return matches[0]
+
 
 def parse_isotope(name: str) -> str:
     # Why not have all isotopes as U238 rather than 238U and use this method
