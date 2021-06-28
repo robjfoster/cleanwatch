@@ -126,7 +126,7 @@ def inverse_scale(
         scale_factor: float):
     comp_contribs = {}
     total = total_accidentals(components)
-    sum = 0
+    sum_orig = 0
     sum_scaled = 0
     for idx, comp in enumerate(components):
         comps_copy = copy.deepcopy(components)
@@ -135,11 +135,11 @@ def inverse_scale(
             comps_copy[idx].activities[iso] = comp.activities[iso] * 0
             comps_copy[idx].update(skip_activity=True)
             y1 = total_accidentals(comps_copy)
-            comps_copy[idx].activities[iso] = comp.activities[iso] * 1
+            comps_copy[idx].activities[iso] = comp.activities[iso] * 1.0
             comps_copy[idx].update(skip_activity=True)
             y2 = total_accidentals(comps_copy)
             iso_contrib = (y2 - y1) / total
-            sum += iso_contrib
+            sum_orig += iso_contrib
             iso_contribs[iso] = iso_contrib
             comps_copy[idx].activities[iso] = comp.activities[iso]
         comp_contribs[comp.name] = iso_contribs

@@ -5,9 +5,6 @@ import ROOT as root
 
 from .isotope import isotopes
 
-# Currently, Tl210 values are multiplied by 0.002. Not sure why. Have included
-# this in the new version for the moment to match up results but should check
-# what the reason for this factor is.
 
 EFF_RFILE = "results.root"
 
@@ -142,9 +139,9 @@ class Component():
                         hist.FindBin(fiducial_cut, prompt_cut))
                     d_eff = hist.GetBinContent(
                         hist.FindBin(fiducial_cut, delayed_cut))
-                    if ciso == "210Tl":
-                        p_eff *= 0.002
-                        d_eff *= 0.002
+                    if iso_obj.chain:
+                        p_eff *= iso_obj.branches[ciso]
+                        d_eff *= iso_obj.branches[ciso]
                     eff = (p_eff, d_eff)
                 else:
                     eff = (0., 0.)

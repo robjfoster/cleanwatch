@@ -4,6 +4,7 @@ from cleanwatch.component import Component
 from cleanwatch.interface import Interface
 
 # Edit this to change the default detector components and activity values
+# The component name should match with watchmakers
 
 
 def get_defaults() -> List[Component]:

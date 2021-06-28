@@ -88,8 +88,17 @@ class Interface(cmd.Cmd):
                 print("Invalid input. \n")
                 continue
             break
-        for iso in user_comp.isotopes.values():
-            print(iso.name)
+        for iso in user_comp.activities:
+            print(iso, user_comp.activities[iso], "Bq")
+        while True:
+            for iso in user_comp.activities:
+                try:
+                    new_act = float(input(f"Enter new activity for {iso}: "))
+                except ValueError:
+                    print("Invalid input")
+                    continue
+                user_comp.activities[iso] = new_act
+            break
         return
 
     def do_plot(self, args):
