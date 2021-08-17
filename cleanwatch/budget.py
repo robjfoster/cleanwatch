@@ -182,6 +182,7 @@ def budget(
             print(e)
             return revcomponents
     if method == 'c':
+        inverse_scale(components, mbg/totacc)
         grads, norm = inv_gradients(components, signal, t3sigma)
         scales = {compname: {iso: grad/norm for iso, grad in isodict.items()}
                   for compname, isodict in grads.items()}

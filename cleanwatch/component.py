@@ -14,11 +14,12 @@ class Component():
     # activity and efficiency calculations.
 
     def __init__(self, name: str, mass: float, region: str = None,
-                 rate_format: str = None):
+                 rate_format: str = None, fixed: bool = False):
         self.name = name
         self.region = region
         self.rate_format = rate_format
         self.mass = mass
+        self.fixed = fixed
         self.isotopes = {}
         # Could have all these dicts
         self.activities = {}  # Dict of {isotope_obj: activity}
