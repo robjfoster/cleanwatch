@@ -1,3 +1,4 @@
+from collections import namedtuple
 import re
 from typing import Dict, List
 
@@ -13,13 +14,18 @@ class Component():
     # Container for each area of the detector e.g. PMTs, tank. Handles
     # activity and efficiency calculations.
 
-    def __init__(self, name: str, mass: float, region: str = None,
-                 rate_format: str = None, fixed: bool = False):
+    def __init__(self, name: str,
+                 mass: float,
+                 region: str = None,
+                 rate_format: str = None,
+                 fixed: bool = False,
+                 rfile: str = None):
         self.name = name
-        self.region = region
+        self.region = region  # Not used
         self.rate_format = rate_format
         self.mass = mass
-        self.fixed = fixed
+        self.fixed = fixed  # Not used yet
+        self.rfile = rfile if rfile else EFF_RFILE
         self.isotopes = {}
         # Could have all these dicts
         self.activities = {}  # Dict of {isotope_obj: activity}
@@ -44,12 +50,14 @@ class Component():
     def set_rate(self, name: str, rate: float) -> None:
         self.rates[name] = rate
 
-    def update(self, skip_activity=False) -> None:
+    def update(self, skip_activity=False, params: namedtuple = None) -> None:
         if not skip_activity:
             self.calculate_activity()
-        self.get_efficiencies(8, 19)
+        self.get_efficiencies(
+            params.prompt_cut, params.delayed_cut, fiducial_cut=params.fiducial_cut)
         self.calculate_singles()
-        self.calculate_accidentals()
+        self.calculate_accidentals(
+            time_cut=params.IBDtimecut, space_cut=params.IBDspacecut)
 
     def calculate_activity(self) -> None:
         # Calculates activities for all isotopes registered with this
@@ -125,15 +133,16 @@ class Component():
         fiducial_cut: float = 1.9
     ) -> None:
         efficiencies = {}
-        rfile = root.TFile(EFF_RFILE, "READ")
+        rfile = root.TFile(self.rfile, "READ")
         for iso, iso_obj in self.isotopes.items():
             ceffs = {}
             for ciso in iso_obj.contributors:
                 if iso_obj.chain:
                     # Might be able to remove the if statement here, needs testing
-                    histname = find_hist(self.name, ciso, parent=iso)
+                    histname = find_hist(
+                        self.name, ciso, self.rfile, parent=iso)
                 else:
-                    histname = find_hist(self.name, iso)
+                    histname = find_hist(self.name, iso, self.rfile)
                 if histname:
                     hist = rfile.Get(histname)
                     p_eff = hist.GetBinContent(
@@ -230,8 +239,8 @@ class Component():
 # for tkey in file.GetListOfKeys(): key = tkey.GetName(); hist = file.Get(key)
 
 
-def find_hist(location: str, isotope: str, parent: bool = None) -> List[str]:
-    file = root.TFile(EFF_RFILE, "READ")
+def find_hist(location: str, isotope: str, filepath: str, parent: bool = None) -> List[str]:
+    file = root.TFile(filepath, "READ")
     histkeys = []
     for tkey in file.GetListOfKeys():
         histkeys.append(tkey.GetName())
@@ -242,7 +251,8 @@ def find_hist(location: str, isotope: str, parent: bool = None) -> List[str]:
         matches = [key for key in matches if re.search(
             rf'_CHAIN_{parent}_NA', key)]
     if len(matches) != 1:
-        #print(f"Could not find histogram for {isotope} ({parent}) in {location} in {EFF_RFILE}")
+        print(
+            f"Could not find histogram for {isotope} (chain: {parent}) in {location} in {filepath}")
         return []
     else:
         return matches[0]

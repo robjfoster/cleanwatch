@@ -1,3 +1,4 @@
+from collections import namedtuple
 import copy
 from typing import Dict, List, Tuple
 
@@ -62,9 +63,9 @@ def maxbg(
     WR = WRratio * S
     B = (((t3sigma * S**2) / sigma**2) - (S / Ronoff)) / (1 + (1. / Ronoff))
     maxB = B - FN - RN - WR
-    if maxB < 0:
-        raise ValueError(f"Cannot detect within {t3sigma} days at signal rate \
-                         of {signal} per day. Returning.")
+    # if maxB < 0:
+    #    raise ValueError(f"Cannot detect within {t3sigma} days at signal rate \
+    #                     of {signal} per day. Returning.")
     return maxB
 
 
@@ -87,7 +88,8 @@ def bg_ratio(
 def inv_gradients(
         components: List[Component],
         signal: float,
-        t3sigma: float
+        t3sigma: float,
+        params: namedtuple
 ) -> Tuple[Dict[str, Dict[str, float]], float]:
     # Need to copy components, adjust activity for a given isotope, calculate
     # and then return components to original state
@@ -99,10 +101,12 @@ def inv_gradients(
         grad = {}
         for iso, iso_obj in comp.isotopes.items():
             comps_copy[idx].activities[iso] = comp.activities[iso] * 0.5
-            comps_copy[idx].update(skip_activity=True)
+            comps_copy[idx].update(skip_activity=True, params=params)
+            # REPLACE THESE WITH CALCULATION AND USE PARAMS
             y1 = bg_ratio(comps_copy, signal, t3sigma)
             comps_copy[idx].activities[iso] = comp.activities[iso] * 1.5
-            comps_copy[idx].update(skip_activity=True)
+            comps_copy[idx].update(skip_activity=True, params=params)
+            # REPLACE THESE WITH CALCULATION AND USE PARAMS
             y2 = bg_ratio(comps_copy, signal, t3sigma)
             if (y2 - y1) == 0:
                 grad[iso] = 0
@@ -123,7 +127,8 @@ def inv_gradients(
 
 def inverse_scale(
         components: List[Component],
-        scale_factor: float):
+        scale_factor: float,
+        params: namedtuple):
     comp_contribs = {}
     total = total_accidentals(components)
     sum_orig = 0
@@ -133,10 +138,10 @@ def inverse_scale(
         iso_contribs = {}
         for iso, iso_obj in comp.isotopes.items():
             comps_copy[idx].activities[iso] = comp.activities[iso] * 0
-            comps_copy[idx].update(skip_activity=True)
+            comps_copy[idx].update(skip_activity=True, params=params)
             y1 = total_accidentals(comps_copy)
             comps_copy[idx].activities[iso] = comp.activities[iso] * 1.0
-            comps_copy[idx].update(skip_activity=True)
+            comps_copy[idx].update(skip_activity=True, params=params)
             y2 = total_accidentals(comps_copy)
             iso_contrib = (y2 - y1) / total
             sum_orig += iso_contrib
@@ -160,13 +165,13 @@ def inverse_scale(
             sum_scaled += scaled_contrib
             iso_scaled_contribs[iso] = scaled_contrib
         comp_scaled_contribs[comp] = iso_scaled_contribs
-    breakpoint()
 
 
 def budget(
         components: List[Component],
         signal: float,
         t3sigma: float,
+        params: namedtuple,
         totacc: float = 0,
         mbg: float = 0,
         method='e',
@@ -182,28 +187,31 @@ def budget(
             print(e)
             return revcomponents
     if method == 'c':
-        inverse_scale(components, mbg/totacc)
-        grads, norm = inv_gradients(components, signal, t3sigma)
+        import warnings
+        warnings.warn("'c' method for budget not yet implemented.")
+        inverse_scale(components, mbg/totacc, params)
+        grads, norm = inv_gradients(components, signal, t3sigma, params)
         scales = {compname: {iso: grad/norm for iso, grad in isodict.items()}
                   for compname, isodict in grads.items()}
         for comp in components:
             bg_share = comp.share(mbg, totacc, scales=scales)
             revact = comp.revise_activity(bg_share, mbg/totacc)
             revcomp = Component(comp.name, comp.mass,
-                                rate_format=comp.rate_format)
+                                rate_format=comp.rate_format, rfile=comp.rfile)
             for iso, act in revact.items():
                 # type: ignore [why does this trigger issue with type hints?]
                 revcomp.add_isotope(iso, act)
-            revcomp.update()
+            revcomp.update(params=params)
             revcomponents.append(revcomp)
         return revcomponents
     for comp in components:
         bg_share = comp.share(mbg, totacc)
         revact = comp.revise_activity(bg_share, mbg/totacc)
-        revcomp = Component(comp.name, comp.mass, rate_format=comp.rate_format)
+        revcomp = Component(comp.name, comp.mass,
+                            rate_format=comp.rate_format, rfile=comp.rfile)
         for iso, act in revact.items():
             # type: ignore why does this trigger issue with type hints?
             revcomp.add_isotope(iso, act)
-        revcomp.update()
+        revcomp.update(params=params)
         revcomponents.append(revcomp)
     return revcomponents
